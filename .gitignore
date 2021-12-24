@@ -1,0 +1,5 @@
+*.job
+*.pkl
+*.txt
+*.npz
+__pycache__/
