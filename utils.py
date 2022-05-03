@@ -257,7 +257,7 @@ def gaussian_sample_from_mu_prec(mu, prec, key):
     # reparametrization trick but sampling using precision matrix instead
     L = jnp.linalg.cholesky(prec)
     z = jrandom.normal(key, mu.shape)
-    return mu+jax.scipy.linalg.solve_triangular(L, z, lower=True)
+    return mu+jax.scipy.linalg.solve_triangular(L.T, z, lower=False)
 
 
 def matching_sources_corr(est_sources, true_sources, method="pearson"):
