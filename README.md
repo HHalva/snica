@@ -1,6 +1,6 @@
 # Disentangling Identifiable Features from Noisy Data with Structured Nonlinear ICA
 
-This repository contains code for our $\delta$-SNICA model from the [paper](https://arxiv.org/abs/2106.09620), published at NeurIPS 2021. If you use our code/model for your research, we would be grateful if you cite our work as:
+This repository contains code for our $\vardelta$-SNICA model from the [paper](https://arxiv.org/abs/2106.09620), published at NeurIPS 2021. If you use our code/model for your research, we would be grateful if you cite our work as:
 
 ```bib
 @inproceedings{HalvaSNICA21,
