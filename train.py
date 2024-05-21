@@ -205,6 +205,7 @@ def full_train(x, f, z, z_mu, states, params, args, est_key):
 
         # evaluate
         qz, qzlag_z, qu, quu = posteriors
+        pdb.set_trace()
         mcc, _, sort_idx = matching_sources_corr(qz[0][:, :, 0], z_mu[:, :, 0])
         f_mu_est = vmap(decoder_mlp, in_axes=(None, -1),
                         out_axes=-1)(all_params[1][1], qz[0][:, :, 0])

@@ -253,11 +253,15 @@ def invmp(X, Y):
     return invcholp(jnp.linalg.cholesky(X), Y)
 
 
-def gaussian_sample_from_mu_prec(mu, prec, key):
-    # reparametrization trick but sampling using precision matrix instead
-    L = jnp.linalg.cholesky(prec)
+def gaussian_sample_w_diag_chol(mu, chol, key):
     z = jrandom.normal(key, mu.shape)
-    return mu+jax.scipy.linalg.solve_triangular(L.T, z, lower=False)
+    return mu + chol*z
+
+
+def gaussian_sample_w_precision_chol(mu, prec_chol, key):
+    # reparametrization trick but sampling using precision matrix instead
+    z = jrandom.normal(key, mu.shape)
+    return mu+jax.scipy.linalg.solve_triangular(prec_chol.T, z, lower=False)
 
 
 def matching_sources_corr(est_sources, true_sources, method="pearson"):

@@ -12,7 +12,7 @@ import jax.random as jrandom
 import matplotlib.pyplot as plt
 
 from func_estimators import init_nica_params, nica_mlp
-from utils import gaussian_sample_from_mu_prec, invmp, tree_prepend
+from utils import gaussian_sample_w_diag_chol, invmp, tree_prepend
 from utils import multi_tree_stack
 
 def ar2_lds(alpha, beta, mu, vz, vz0, vx):
@@ -49,68 +49,69 @@ def generate_meanreverting_lds(key):
     return ar2_lds(alpha, beta, mu, vz, vz0, vx)
 
 
-def generate_slds(K, key):
+def generate_slds(key):
     os_key, mr_key = jrandom.split(key)
     A = jnp.array([[.99, .01], [.01, .99]])
-    a0 = jnp.ones(K)/K
+    a0 = jnp.ones(2)/2
     B, b, b0, C, c, Q, Q0, R = multi_tree_stack([
         generate_oscillatory_lds(os_key),
         generate_meanreverting_lds(mr_key)])
     return (A, a0), (B, b, b0, C, c, Q, Q0, R)
 
 
-def gen_markov_chain(pi, A, num_steps, samplekey):
-    def make_mc_step(A, num_states):
+def gen_markov_chain(a0, A, num_steps, samplekey):
+    def make_mc_step(A):
         @jit
         def sample_mc_step(cur_state, key):
             p = A[cur_state]
-            new_state = jrandom.choice(key, jnp.arange(num_states), p=p)
+            new_state = jrandom.choice(key, jnp.arange(2), p=p)
             return new_state, new_state
         return sample_mc_step
 
-    K = pi.shape[0]
     keys = jrandom.split(samplekey, num_steps)
-    start_state = jrandom.choice(keys[0], jnp.arange(K), p=pi)
-    mc_step = make_mc_step(A, K)
+    start_state = jrandom.choice(keys[0], jnp.arange(2), p=a0)
+    mc_step = make_mc_step(A)
     _, states = scan(mc_step, start_state, keys[1:])
     states = jnp.concatenate([start_state.reshape((1,)), states])
     return states
 
 
-def make_slds_sampler(B, b, Q):
+def make_slds_sampler(B, b, L_diag):
     @jit
     def sample_slds(z_prev, state_with_key):
         state, key = state_with_key
         z_mu = B[state]@z_prev + b[state]
-        z = gaussian_sample_from_mu_prec(z_mu, Q[state], key)
+        z = gaussian_sample_w_diag_chol(z_mu, L_diag[state], key)
         return z, (z, z_mu)
     return sample_slds
 
 
-def gen_slds(T, K, d, paramkey, samplekey):
+def gen_slds(T, paramkey, samplekey):
     paramkey, p_key = jrandom.split(paramkey)
     s_ldskey, s_hmmkey = jrandom.split(samplekey)
 
     # generate variables
-    (A, pi), (B, b, b_init, _, _, Q, Q_init, _) = generate_slds(K, p_key)
+    (A, a0), (B, b, b0, _, _, Q, Q_init, _) = generate_slds(p_key)
 
     # generate hidden markov chain
-    states = gen_markov_chain(pi, A, T, s_hmmkey)
+    states = gen_markov_chain(a0, A, T, s_hmmkey)
 
     # sample slds
     s_ldskeys = jrandom.split(s_ldskey, T)
-    z_init = gaussian_sample_from_mu_prec(b_init[states[0]],
-                                          Q_init[states[0]], s_ldskeys[0])
-    sample_func = make_slds_sampler(B, b, Q)
-    z, z_mu = tree_prepend((z_init, b_init[states[0]]),
+    L_diag = jnp.sqrt(vmap(lambda _: 1 / jnp.diag(_))(Q))
+    L0_diag = jnp.sqrt(vmap(lambda _: 1 / jnp.diag(_))(Q0))
+    z_init = gaussian_sample_w_diag_chol(b0[states[0]], L0_diag,
+                                         s_ldskeys[0])
+    sample_func = make_slds_sampler(B, b, L_diag)
+    z, z_mu = tree_prepend((z_init, b0[states[0]]),
                            scan(sample_func, z_init,
                                 (states[1:], s_ldskeys[1:]))[1])
-    hmm_params = (pi, A)
-    lds_params = (b_init, Q_init, B, b, Q)
+    hmm_params = (a0, A)
+    lds_params = (b0, Q_init, B, b, Q)
     return z, z_mu, states, lds_params, hmm_params
 
 
-def gen_slds_nica(N, M, T, K, d, L, paramkey, samplekey, repeat_layers=False):
+def gen_slds_nica(N, M, T, L, paramkey, samplekey, repeat_layers=False):
     # generate several slds
     paramkeys = jrandom.split(paramkey, N+1)
     samplekeys = jrandom.split(samplekey, N+1)
@@ -155,19 +156,3 @@ if __name__ == "__main__":
         # with nonlinear ICA
             x, z, z_mu, states, x_params, z_params, u_params = gen_slds_nica(
                 N, M, T, K, d, L, pkey, skey)
-
-    ## sanity check to make sure Q reasonable level
-    b0, Q0, B, b, Q = z_params
-    for i in range(N):
-        for j in range(K):
-            print("* QZvar_ratio:",
-                  jnp.diag(inv(Q)[i, j]
-                           / jnp.cov(z[i][states[i] == j].T)).mean())
-
-    for i in range(N):
-        print("z lagcorr:", jnp.corrcoef(z[i, :-10, :].T, z[i, 10:, :].T))
-    print("x lagcorr:", round(jnp.corrcoef(x[:, :-1], x[:, 1:]), 2))
-
-    plt.plot(z_mu[:, :200, 0].T)
-    plt.show()
-    pdb.set_trace()
