@@ -7,13 +7,14 @@ config.update("jax_enable_x64", True)
 from jax import jit, vmap
 from jax.lax import scan
 import jax.numpy as jnp
-from jax.numpy.linalg import inv
 import jax.random as jrandom
 import matplotlib.pyplot as plt
+from omegaconf import OmegaConf
 
 from func_estimators import init_nica_params, nica_mlp
-from utils import gaussian_sample_w_diag_chol, invmp, tree_prepend
+from utils import gaussian_sample_w_diag_chol, tree_prepend
 from utils import multi_tree_stack
+
 
 def ar2_lds(alpha, beta, mu, vz, vz0):
     B = jnp.array([[1 + alpha - beta, -alpha], [1.0, .0]])
@@ -80,9 +81,8 @@ def make_slds_sampler(B, b, L_diag):
     return sample_slds
 
 
-def gen_slds(T, paramkey, samplekey):
-    paramkey, p_key = jrandom.split(paramkey)
-    s_ldskey, s_hmmkey = jrandom.split(samplekey)
+def gen_slds(T, key):
+    p_key, s_ldskey, s_hmmkey = jrandom.split(key, 3)
 
     # generate variables
     (A, a0), (B, b, b0, Q, Q0) = generate_slds(p_key)
@@ -105,40 +105,42 @@ def gen_slds(T, paramkey, samplekey):
     return z, z_mu, states, lds_params, hmm_params
 
 
-def gen_slds_nica(N, M, T, L, param_seed, sample_seed, noise_factor=0.1,
-                  repeat_layers=False):
-    paramkey = jrandom.PRNGKey(param_seed)
-    samplekey = jrandom.PRNGKey(sample_seed)
+def gen_slds_nica(cfg):
+    # unpack the args
+    N = cfg.N
+    M = cfg.M
+    T = cfg.T
+    L = cfg.L
+    noise_factor = cfg.noise_factor
+    key = jrandom.PRNGKey(cfg.seed)
+    repeat_layers = cfg.repeat_layers
+
     # generate several slds
-    paramkeys = jrandom.split(paramkey, N+1)
-    samplekeys = jrandom.split(samplekey, N+1)
-    z, z_mu, states, lds_params, hmm_params = vmap(gen_slds, (None, 0, 0), 1)(
-        T, paramkeys[1:], samplekeys[1:])
+    keys = jrandom.split(key, N+1)
+    z, z_mu, states, lds_params, hmm_params = vmap(gen_slds, (None, 0), 1)(
+        T, keys[1:])
     s = z[:, :, 0]
     # mix signals
-    paramkeys = jrandom.split(paramkeys[0], 2)
-    nica_params = init_nica_params(N, M, L, paramkeys[0], repeat_layers)
+    nica_keys = jrandom.split(keys[0])
+    nica_params = init_nica_params(N, M, L, nica_keys[0], repeat_layers)
     f = nica_mlp(nica_params, s)
     # add output noise
     noise_var = noise_factor * f.var(0)
     R = jnp.diag(1 / noise_var)
     likelihood_params = (nica_params, R)
-    x = f + jnp.sqrt(noise_var)[None,:] * jrandom.normal(samplekeys[0],
-                                                             shape=f.shape)
+    x = f + jnp.sqrt(noise_var)[None,:] * jrandom.normal(nica_keys[1],
+                                                         shape=f.shape)
     return x, f, z, z_mu, states, likelihood_params, lds_params, hmm_params
 
 
 if __name__ == "__main__":
-    key = jrandom.PRNGKey(1)
     N = 3
-    M = 12
-    T = 1000
-    L = 2
-    pkey, skey = jrandom.split(key)
+    cfg = {'N': N, 'M': 12, 'T': 1000, 'L': 2, 'key': 0, 'seed': 50,
+           'noise_factor': 0.15, 'repeat_layers': False}
+    cfg = OmegaConf.create(cfg)
 
     # generate data from slds with linear ica
-    x, f, z, z_mu, states, x_params, z_params, u_params = gen_slds_nica(
-        N, M, T, L, pkey, skey)
+    x, f, z, z_mu, states, x_params, z_params, u_params = gen_slds_nica(cfg)
 
     t = 400
     for i in range(N):

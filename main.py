@@ -94,14 +94,7 @@ def main(cfg: DictConfig) -> None:
     cfg = cfg.experiments
 
     if cfg.experiment_name == 'snica_synthetic':
-        param_key = jrandom.PRNGKey(cfg.rng.param_seed)
-        data_key = jrandom.PRNGKey(cfg.rng.data_seed)
-        x, f, z, z_mu, states, *params = gen_slds_nica(cfg.data_gen.N,
-                                                       cfg.data_gen.M,
-                                                       cfg.data_gen.T,
-                                                       cfg.data_gen.L,
-                                                       cfg.rng.param_seed,
-                                                       cfg.rng.data_seed)
+        x, f, z, z_mu, states, *params = gen_slds_nica(cfg.data_gen)
         pdb.set_trace()
 
 

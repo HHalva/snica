@@ -7,6 +7,9 @@ data_gen:
   L: 2
   K: 2 # this is fixed
   d: 2 # this is fixed
+  noise_factor: 0.1
+  seed: 50
+  repeat_layers: False
 
 model:
   N: ${..data_gen.N}
@@ -32,7 +35,7 @@ training:
 
 rng:
   param_seed: 1
-  data_seed: 50
+  
   est_seed: 100
 
 plotting:
