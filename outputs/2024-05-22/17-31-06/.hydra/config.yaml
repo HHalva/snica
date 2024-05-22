@@ -1,0 +1,34 @@
+experiments:
+  experiment_name: snica_synthetic
+  data_gen:
+    'N': 3
+    M: 12
+    T: 100000
+    L: 2
+    K: 2
+    d: 2
+  model:
+    'N': ${data_gen.N}
+    M: ${data_gen.M}
+    T: ${data_gen.T}
+    L: ${data_gen.L}
+    K: ${data_gen.K}
+    d: ${data_gen.d}
+    encoder_hidden: 128
+    encoder_layers: 2
+    decoder_hiddern: 64
+    decoder_layers: 1
+  dbg:
+    gt_gm_params: false
+  training:
+    epochs: 100
+    inference_iters: 5
+    elbo_samples: 1
+    gm_learning_rate: 0.01
+    nn_learning_rate: 0.01
+  rng:
+    param_seed: 1
+    data_seed: 50
+    est_seed: 100
+  plotting:
+    plot_freq: 100

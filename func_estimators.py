@@ -1,4 +1,4 @@
-from jax.config import config
+from jax import config
 
 config.update("jax_enable_x64", True)
 
@@ -7,9 +7,7 @@ import pdb
 import jax.nn as nn
 import jax.numpy as jnp
 import jax.random as jrandom
-from jax import vmap
-from jax.lax import scan
-from jax.ops import index, index_update
+from jax import vmap, lax, jit
 
 
 def l2normalize(W, axis=0):
@@ -35,17 +33,7 @@ def smooth_leaky_relu(x, alpha=0.1):
     Returns:
         Value transformed by the smooth leaky ReLU.
     """
-    return alpha*x + (1 - alpha)*jnp.logaddexp(x, 0)
-
-
-def SmoothLeakyRelu(slope):
-    """Smooth Leaky ReLU activation function.
-    Args:
-        slope (float): slope to control degree of non-linearity.
-    Returns:
-       Lambda function for computing smooth Leaky ReLU.
-    """
-    return lambda x: smooth_leaky_relu(x, alpha=slope)
+    return lambda x: alpha*x + (1 - alpha)*jnp.logaddexp(x, 0)
 
 
 def xtanh(slope):
@@ -61,13 +49,13 @@ def init_layer_params(in_dim, out_dim, key):
 
 def unif_nica_layer(N, M, key, iter_4_cond=1e4):
     def _gen_matrix(N, M, key):
-        A = jrandom.uniform(key, (N, M), minval=0., maxval=2.) - 1.
+        A = jrandom.uniform(key, (N, M), minval=-1., maxval=1.)
         A = l2normalize(A)
         _cond = jnp.linalg.cond(A)
         return A, _cond
 
     # generate multiple matrices
-    keys = jrandom.split(key, iter_4_cond)
+    keys = jrandom.split(key, int(iter_4_cond))
     A, conds = vmap(_gen_matrix, (None, None, 0))(N, M, keys)
     target_cond = jnp.percentile(conds, 25)
     target_idx = jnp.argmin(jnp.abs(conds-target_cond))
@@ -80,10 +68,10 @@ def init_nica_params(N, M, nonlin_layers, key, repeat_layers):
     layer_sizes = [N] + [M]*nonlin_layers + [M]
     keys = jrandom.split(key, len(layer_sizes)-1)
     if repeat_layers:
-        _keys = keys
+        _keys = keys.copy()
         keys = jnp.repeat(_keys[0][None], _keys.shape[0], 0)
         if N != M:
-            keys = index_update(keys, index[1:], _keys[-1])
+            keys = keys.at[1:].set(_keys[-1])
     return [unif_nica_layer(n, m, k) for (n, m, k)
             in zip(layer_sizes[:-1], layer_sizes[1:], keys)]
 
@@ -148,7 +136,7 @@ def decoder_mlp(params, x, activation='xtanh', slope=0.1):
     if activation == 'xtanh':
         act = xtanh(slope)
     else:
-        act = SmoothLeakyRelu(slope)
+        act = smooth_leaky_relu(slope)
         #act = lambda x: nn.leaky_relu(x, slope)
     z = x
     if len(params) > 1:
@@ -161,29 +149,20 @@ def decoder_mlp(params, x, activation='xtanh', slope=0.1):
     return z
 
 
-def nica_mlp(params, s, activation='xtanh', slope=0.1):
-    """Forward pass for encoder MLP for estimating nonlinear mixing function.
-    Args: (OLD; IGNORE)
-        params (list): nested list where each element is a list of weight
-            matrix and bias for a given layer. e.g. [[W_0, b_0], [W_1, b_1]].
-        inputs (matrix): input data.
-        slope (float): slope to control the nonlinearity of the activation
-            function.
-    Returns:
-        Outputs f(s)
+@jit
+def nica_mlp(params, s, xtanh_act=True, slope=0.01):
+    """Forward-pass of mixing function.
     """
-    if activation == 'xtanh':
-        act = xtanh(slope)
-    else:
-        act = SmoothLeakyRelu(slope)
-    z = s
-    if len(params) > 1:
-        hidden_params = params[:-1]
-        for i in range(len(hidden_params)):
-            z = act(z@hidden_params[i])
-    A_final = params[-1]
-    z = z@A_final
+    def _fwd_pass(z, params_list):
+        for A in params_list[:-1]:
+            z = lax.cond(xtanh_act, xtanh(slope), smooth_leaky_relu(slope), z@A)
+        return z@params_list[-1]
+
+
+    z = lax.cond(len(params) > 1, lambda a, B: _fwd_pass(a, B),
+                 lambda a, B: a@B[0], s, params)
     return z
+
 
 
 if __name__ == "__main__":

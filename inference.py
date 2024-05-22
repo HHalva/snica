@@ -1,4 +1,4 @@
-from jax.config import config
+from jax import config
 config.update("jax_enable_x64", True)
 
 import pdb
@@ -8,7 +8,6 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jax import vmap, jit
 from jax.lax import scan
-from jax.ops import index, index_update, index_add
 from jax.scipy.special import logsumexp
 from jax.experimental import host_callback
 
@@ -20,7 +19,6 @@ from utils import invmp
 
 import matplotlib.pyplot as plt
 
-from jax.config import config
 
 
 #@jit

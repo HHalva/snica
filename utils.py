@@ -1,4 +1,4 @@
-from jax.config import config
+from jax import config
 config.update("jax_enable_x64", True)
 
 import os
@@ -13,11 +13,10 @@ import jax.numpy as jnp
 from jax import random as jrandom
 from jax import vmap
 from jax import jit, lax
-from jax.ops import index_update, index_add, index
 from jax.lax import scan
+from jax.tree_util import tree_map
 
 import pickle
-import cloudpickle
 import scipy as sp
 import matplotlib.pyplot as plt
 
@@ -198,14 +197,14 @@ def vrepeat_tuple(tpl, T):
 
 
 def tree_prepend(prep, tree):
-    preprended = jax.tree_multimap(
+    preprended = tree_map(
         lambda a, b: jnp.vstack((a[None], b)), prep, tree
     )
     return preprended
 
 
 def tree_append(tree, app):
-    appended = jax.tree_multimap(
+    appended = tree_map(
         lambda a, b: jnp.vstack((a, b[None])), tree, app
     )
     return appended
@@ -213,32 +212,32 @@ def tree_append(tree, app):
 
 def tree_sum(trees):
     '''Sum over pytrees'''
-    return jax.tree_multimap(lambda *x: sum(x), *trees)
+    return tree_map(lambda *x: sum(x), *trees)
 
 
 def tree_sub(tree1, tree2):
-    return jax.tree_multimap(
+    return tree_map(
         lambda a, b: a-b, tree1, tree2)
 
 
 def tree_droplast(tree):
     '''Drop last index from each leaf'''
-    return jax.tree_map(lambda a: a[:-1], tree)
+    return tree_map(lambda a: a[:-1], tree)
 
 
 def tree_dropfirst(tree):
     '''Drop first index from each leaf'''
-    return jax.tree_map(lambda a: a[1:], tree)
+    return tree_map(lambda a: a[1:], tree)
 
 
 def tree_get_idx(idx, tree):
     '''Get idx row from each leaf of tuple'''
-    return jax.tree_map(lambda a: a[idx], tree)
+    return tree_map(lambda a: a[idx], tree)
 
 
 def multi_tree_stack(trees):
     '''Stack trees along a new axis'''
-    return jax.tree_multimap(lambda *a: jnp.stack(a), *trees)
+    return tree_map(lambda *a: jnp.stack(a), *trees)
 
 
 # inv(L*L.T)*Y

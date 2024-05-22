@@ -1,8 +1,10 @@
 import argparse
 import pdb
 import sys
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
-from jax.config import config
+from jax import config
 config.update("jax_enable_x64", True)
 
 import jax.random as jrandom
@@ -85,28 +87,40 @@ def parse():
     return args
 
 
-def main():
-    args = parse()
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def main(cfg: DictConfig) -> None:
+    # load configs
+    OmegaConf.to_yaml(cfg)
+    cfg = cfg.experiments
 
-    # generate data
-    param_key = jrandom.PRNGKey(args.param_seed)
-    data_key = jrandom.PRNGKey(args.data_seed)
+    if cfg.experiment_name == 'snica_synthetic':
+        param_key = jrandom.PRNGKey(cfg.rng.param_seed)
+        data_key = jrandom.PRNGKey(cfg.rng.data_seed)
+        x, f, z, z_mu, states, *params = gen_slds_nica(cfg.data_gen.N,
+                                                       cfg.data_gen.M,
+                                                       cfg.data_gen.T,
+                                                       cfg.data_gen.L,
+                                                       cfg.rng.param_seed,
+                                                       cfg.rng.data_seed)
+        pdb.set_trace()
 
-    # generate simulated data
-    # !BEWARE d=2, k=2 fixed in data generation code
-    x, f, z, z_mu, states, *params = gen_slds_nica(args.n, args.m, args.t,
-                                                   args.k, args.d, args.l,
-                                                   param_key, data_key,
-                                                   repeat_layers=True)
 
-    # we have not tried this option but could be useful in some cases
-    if args.whiten:
-        pca = PCA(whiten=True)
-        x = pca.fit_transform(x.T).T
 
-    # train
-    est_params, posteriors, best_elbo = full_train(x, f, z, z_mu, states,
-                                                   params, args, args.est_seed)
+#def main_old():
+#    args = parse()
+#
+#    # generate data
+#    param_key = jrandom.PRNGKey(args.param_seed)
+#    data_key = jrandom.PRNGKey(args.data_seed)
+#
+#    # generate simulated data
+#    # !BEWARE d=2, k=2 fixed in data generation code
+#    x, f, z, z_mu, states, *params = gen_slds_nica(args.n, args.m, args.t,
+#                                                   args.l, param_key, data_key)
+#
+#    # train
+#    est_params, posteriors, best_elbo = full_train(x, f, z, z_mu, states,
+#                                                   params, args, args.est_seed)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import pdb
 
 import jax
 from jax import jit, vmap
-from jax.config import config
+from jax import config
 from jax.experimental import host_callback
 from jax.lax import scan
 import jax.numpy as jnp
@@ -14,15 +14,15 @@ from numpy import newaxis
 
 from func_estimators import decoder_mlp, encoder_mlp
 from inference import make_inference
-from utils import (
-    gaussian_sample_from_mu_prec,
-    get_hmm_natparams,
-    get_prec_mat,
-    get_prior_natparams,
-    get_rhos,
-    get_transition_natparams,
-    invmp,
-)
+#from utils import (
+#    gaussian_sample_from_mu_prec,
+#    get_hmm_natparams,
+#    get_prec_mat,
+#    get_prior_natparams,
+#    get_rhos,
+#    get_transition_natparams,
+#    invmp,
+#)
 
 config.update("jax_enable_x64", True)
 
