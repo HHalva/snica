@@ -1,13 +1,12 @@
-from jax import config
-
-config.update("jax_enable_x64", True)
-
 import pdb
 
+import jax
 import jax.nn as nn
 import jax.numpy as jnp
 import jax.random as jrandom
 from jax import vmap, lax, jit
+
+from utils import jax_print
 
 
 def l2normalize(W, axis=0):
@@ -153,42 +152,61 @@ def decoder_mlp(params, x, activation='xtanh', slope=0.1):
 def nica_mlp(params, s, xtanh_act=True, slope=0.01):
     """Forward-pass of mixing function.
     """
+
     def _fwd_pass(z, params_list):
         for A in params_list[:-1]:
-            z = lax.cond(xtanh_act, xtanh(slope), smooth_leaky_relu(slope), z@A)
-        return z@params_list[-1]
+            in_dim, out_dim = A.shape
+            # layer norm
+            _z = layer_norm(z)
+            # nonlinear activation
+            _z = lax.cond(xtanh_act, xtanh(slope),
+                           smooth_leaky_relu(slope), _z @ A)
+            # residual connection
+            z = jnp.eye(out_dim, in_dim)@z + _z
+        return z + layer_norm(z)@params_list[-1]
 
 
-    z = lax.cond(len(params) > 1, lambda a, B: _fwd_pass(a, B),
-                 lambda a, B: a@B[0], s, params)
+    z = lax.cond(len(params) > 1, lambda z, B: _fwd_pass(z, B),
+                 lambda z, B: z @ B[0], s, params)
     return z
+
+
+def layer_norm(x, beta=0, gamma=1, eps=1e-5):
+    mu = x.mean()
+    sigma = x.std()
+    return (x - mu)*gamma / (sigma+eps) + beta
+
 
 
 
 if __name__ == "__main__":
 
     key = jrandom.PRNGKey(0)
-    x_dim = 10
-    s_dim = 4
-    hidden_dim = 20
+    s = jrandom.normal(key, shape=(10,))
+
+    x_dim = 20
+    s_dim = s.shape[0]
+    hidden_dim = x_dim
     hidden_layers = 5
-    s = jnp.ones((s_dim,))
 
     # nonlinear ICA fwd test
     nica_params = init_nica_params(s_dim, x_dim, 3, key, repeat_layers=False)
-    x = nica_mlp(nica_params, s, slope=0.1)
-    dp = init_decoder_params(x_dim, s_dim, 32, 1, key)
-    decoder_mlp(dp, s)
-
-    params = init_encoder_params(x_dim, s_dim, hidden_dim,
-                                 hidden_layers, key)
-    out = encoder_mlp(params, x)
+    x = nica_mlp(nica_params, s, slope=0.01)
 
     pdb.set_trace()
 
-    # linear ICA fwd test
-    key = jrandom.PRNGKey(1)
-    s_dim = 10
-    x_dim = 10
-    ica_params = init_nica_params(s_dim, x_dim, 0, key, repeat_layers=False)
-    unif_nica_layer(4, 5, key, iter_4_cond=1e3)
+    #dp = init_decoder_params(x_dim, s_dim, 32, 1, key)
+    #decoder_mlp(dp, s)
+
+    #params = init_encoder_params(x_dim, s_dim, hidden_dim,
+    #                             hidden_layers, key)
+    #out = encoder_mlp(params, x)
+
+    #pdb.set_trace()
+
+    ## linear ICA fwd test
+    #key = jrandom.PRNGKey(1)
+    #s_dim = 10
+    #x_dim = 10
+    #ica_params = init_nica_params(s_dim, x_dim, 0, key, repeat_layers=False)
+    #unif_nica_layer(4, 5, key, iter_4_cond=1e3)

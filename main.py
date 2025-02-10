@@ -10,7 +10,7 @@ from jax import config
 #import matplotlib.pyplot as plt
 #from sklearn.decomposition import PCA
 
-#from data_generation import gen_slds_nica
+from data_generation import gen_slds_nica
 #from train import full_train
 
 # uncomment to debug NaNs
