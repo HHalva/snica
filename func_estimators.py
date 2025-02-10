@@ -181,7 +181,7 @@ def layer_norm(x, beta=0, gamma=1, eps=1e-5):
     return (x - mu)*gamma / (sigma+eps) + beta
 
 
-def color_wheel(s):
+def color_wheel(s, rgb_colors=None):
     # Convert from JAX arrays to NumPy for color computations
     s_np = np.array(s)
 
@@ -191,53 +191,63 @@ def color_wheel(s):
 
     # 1) Compute angle theta in [-pi, pi]
     theta = np.arctan2(y_vals, x_vals)
+    if rgb_colors is None:
+        # More color cycles if you want more hue variety
+        color_cycles = 1
+        hue = (theta + np.pi) / (2 * np.pi) * color_cycles
+        hue = np.mod(hue, 1.0)  # Wrap into [0, 1]
 
-    # Let's cycle through the color wheel multiple times for more distinct hues
-    color_cycles = 1  # Increase this number for even more color repeats
-    # (-pi => hue=0, +pi => hue=1) multiplied by 'color_cycles'
-    hue = (theta + np.pi) / (2 * np.pi) * color_cycles
-    hue = np.mod(hue, 1.0)  # Wrap back into [0, 1] range
+        # 2) Compute radius for brightness, but raise the lower bound
+        r = np.sqrt(x_vals**2 + y_vals**2)
+        r_max = r.max()
+        value_min = 0.3  # ensures a minimum brightness
+        value = r / (r_max + 1e-7)
+        value = value_min + (1 - value_min) * value
+        value = np.clip(value, 0, 1)
 
-    # 2) Compute radius for brightness
-    r = np.sqrt(x_vals**2 + y_vals**2)
-    r_max = r.max()
-    value = np.clip(r / (r_max + 1e-7), 0, 1)  # Avoid division by zero
+        # Keep saturation = 1 for vivid colors
+        saturation = np.ones_like(hue)
 
-    # Keep saturation=1 for vivid colors
-    saturation = np.ones_like(hue)
+        # Stack HSV and convert to RGB
+        hsv = np.stack([hue, saturation, value], axis=1)
+        rgb_colors = mcolors.hsv_to_rgb(hsv)
 
-    # Stack HSV and convert to RGB
-    hsv = np.stack([hue, saturation, value], axis=1)
-    rgb_colors=mcolors.hsv_to_rgb(hsv)
-
-    # plot
-    plt.scatter(x_vals, y_vals, c=rgb_colors, s=20, alpha=0.8)
+    # Plot with larger points, no alpha
+    plt.scatter(x_vals, y_vals, c=rgb_colors, s=50)
 
     plt.axvline(0, color='gray', linewidth=0.5)
-    plt.gca().set_aspect('equal', 'box')  # Make x & y scales the same
-    plt.title('2D Normal Points with Angle- and Radius-Based Coloring')
+    plt.gca().set_aspect('equal', 'box')
+    plt.title('2D Normal Points with Angle & Radius Coloring (Vivid)')
     plt.xlabel('x')
     plt.ylabel('y')
     plt.grid(True)
     plt.show()
+    return rgb_colors
 
 
 if __name__ == "__main__":
-
+    # settings
     x_dim = 2
     s_dim = 2
+    hidden_layers = 5
+
+    # generate latent
     key = jrandom.PRNGKey(0)
     key2, _ = jrandom.split(key)
-    s = jrandom.normal(key, shape=(100000, s_dim))
-    hidden_layers = 10
+    s = jrandom.normal(key, shape=(10000, s_dim))
 
+    # plot latent
+    s_colors = color_wheel(s)
+ 
     # nonlinear ICA fwd test
     nica_params = init_nica_params(s_dim, x_dim, hidden_layers, key2,
                                    repeat_layers=False)
     x = vmap(lambda _: nica_mlp(nica_params, _, slope=0.01))(s)
 
+    color_wheel(x, rgb_colors=s_colors)
+ 
 
-    color_wheel(s)
+
 
     #plt.scatter(s.T[0], s.T[1])
     #plt.show()
