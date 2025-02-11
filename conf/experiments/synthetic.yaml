@@ -3,8 +3,8 @@ experiment_name: 'snica_synthetic'
 data_gen:
   N: 3
   M: 12
-  T: 100000
-  L: 2
+  T: 200
+  L: 0
   K: 2 # this is fixed
   d: 2 # this is fixed
   noise_factor: 0.1

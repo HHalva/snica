@@ -2,14 +2,14 @@ import pdb
 
 from jax import config
 
-from jax import jit, vmap
+from jax import jit, vmap, debug
 from jax.lax import scan
 import jax.numpy as jnp
 import jax.random as jrandom
 import matplotlib.pyplot as plt
 from omegaconf import OmegaConf
 
-from func_estimators import init_nica_params, nica_mlp
+from func_estimators import init_nica_params, nica_mixer
 from utils import gaussian_sample_w_diag_chol, tree_prepend
 from utils import multi_tree_stack
 
@@ -24,7 +24,7 @@ def ar2_lds(alpha, beta, mu, vz, vz0):
 
 
 def generate_oscillatory_lds(key):
-    keys = jrandom.split(key, 3)
+    keys = jrandom.split(key, 2)
     alpha = jrandom.uniform(keys[0], minval=.9, maxval=1.)  # momentum
     beta = .1  # mean reversion
     mu = jrandom.uniform(keys[1], minval=0., maxval=.5)  # mean level
@@ -87,12 +87,12 @@ def gen_slds(T, key):
 
     # generate hidden markov chain
     states = gen_markov_chain(a0, A, T, s_hmmkey)
-
     # sample slds
     s_ldskeys = jrandom.split(s_ldskey, T)
     L_diag = jnp.sqrt(vmap(lambda _: 1 / jnp.diag(_))(Q))
     L0_diag = jnp.sqrt(vmap(lambda _: 1 / jnp.diag(_))(Q0))
-    z0 = gaussian_sample_w_diag_chol(b0[states[0]], L0_diag[states[0]],
+    z0 = gaussian_sample_w_diag_chol(b0[states[0]],
+                                     L0_diag[states[0]],
                                      s_ldskeys[0])
     sample_func = make_slds_sampler(B, b, L_diag)
     z, z_mu = tree_prepend((z0, b0[states[0]]),
@@ -116,12 +116,13 @@ def gen_slds_nica(cfg):
     # generate several slds
     keys = jrandom.split(key, N+1)
     z, z_mu, states, lds_params, hmm_params = vmap(gen_slds, (None, 0), 1)(
-        T, keys[1:])
+        T, keys[1:]
+    )
     s = z[:, :, 0]
     # mix signals
     nica_keys = jrandom.split(keys[0])
     nica_params = init_nica_params(N, M, L, nica_keys[0], repeat_layers)
-    f = nica_mlp(nica_params, s)
+    f = vmap(lambda _: nica_mixer(nica_params, _))(s)
     # add output noise
     noise_var = noise_factor * f.var(0)
     R = jnp.diag(1 / noise_var)

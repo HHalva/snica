@@ -4,7 +4,7 @@ import jax
 import jax.nn as nn
 import jax.numpy as jnp
 import jax.random as jrandom
-from jax import vmap, lax, jit
+from jax import vmap, lax, jit, debug
 
 from utils import jax_print
 
@@ -153,21 +153,20 @@ def init_nica_params(N, M, nonlin_layers, key, repeat_layers):
 
 
 @jit
-def nica_mlp(params, s, xtanh_act=True, slope=0.01):
+def nica_mixer(params, s, xtanh_act=True, slope=0.01):
     """Forward-pass of mixing function.
     """
 
     def _fwd_pass(z, params_list):
         for A in params_list[:-1]:
             in_dim, out_dim = A.shape
-            # layer norm
-            #_z = layer_norm(z)
             # nonlinear activation
             _z = lax.cond(xtanh_act, xtanh(slope),
                            smooth_leaky_relu(slope), z @ A)
             # residual connection
-            z = jnp.eye(out_dim, in_dim)@z + _z
-        return z + z@params_list[-1]
+            z = z @ jnp.eye(in_dim, out_dim) + _z
+        in_dim, out_dim = params_list[-1].shape
+        return z @ jnp.eye(in_dim, out_dim) + z@params_list[-1]
 
 
     z = lax.cond(len(params) > 1, lambda z, B: _fwd_pass(z, B),
@@ -227,9 +226,9 @@ def color_wheel(s, rgb_colors=None):
 
 if __name__ == "__main__":
     # settings
-    x_dim = 2
     s_dim = 2
-    hidden_layers = 5
+    x_dim = 2
+    hidden_layers = 10
 
     # generate latent
     key = jrandom.PRNGKey(0)
@@ -242,17 +241,7 @@ if __name__ == "__main__":
     # nonlinear ICA fwd test
     nica_params = init_nica_params(s_dim, x_dim, hidden_layers, key2,
                                    repeat_layers=False)
-    x = vmap(lambda _: nica_mlp(nica_params, _, slope=0.01))(s)
+    x = vmap(lambda _: nica_mixer(nica_params, _, slope=0.01))(s)
 
     color_wheel(x, rgb_colors=s_colors)
- 
-
-
-
-    #plt.scatter(s.T[0], s.T[1])
-    #plt.show()
-    #plt.scatter(x.T[0], x.T[1])
-    #plt.show()
-
-
-
+    

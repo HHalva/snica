@@ -199,11 +199,11 @@ def jax_print(x):
 #    return scan(lambda tup, _: (tup, tup), tpl, None, length=T)[1]
 #
 #
-#def tree_prepend(prep, tree):
-#    preprended = tree_map(
-#        lambda a, b: jnp.vstack((a[None], b)), prep, tree
-#    )
-#    return preprended
+def tree_prepend(prep, tree):
+    preprended = tree_map(
+        lambda a, b: jnp.vstack((a[None], b)), prep, tree
+    )
+    return preprended
 #
 #
 #def tree_append(tree, app):
@@ -238,9 +238,9 @@ def jax_print(x):
 #    return tree_map(lambda a: a[idx], tree)
 #
 #
-#def multi_tree_stack(trees):
-#    '''Stack trees along a new axis'''
-#    return tree_map(lambda *a: jnp.stack(a), *trees)
+def multi_tree_stack(trees):
+    '''Stack trees along a new axis'''
+    return tree_map(lambda *a: jnp.stack(a), *trees)
 #
 #
 ## inv(L*L.T)*Y
@@ -255,9 +255,9 @@ def jax_print(x):
 #    return invcholp(jnp.linalg.cholesky(X), Y)
 #
 #
-#def gaussian_sample_w_diag_chol(mu, chol, key):
-#    z = jrandom.normal(key, mu.shape)
-#    return mu + chol*z
+def gaussian_sample_w_diag_chol(mu, chol, key):
+    z = jrandom.normal(key, mu.shape)
+    return mu + chol*z
 #
 #
 #def gaussian_sample_w_precision_chol(mu, prec_chol, key):

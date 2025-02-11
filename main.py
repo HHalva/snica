@@ -2,7 +2,7 @@ import argparse
 import pdb
 import sys
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from jax import config
 
@@ -24,8 +24,8 @@ def main(cfg: DictConfig) -> None:
 
     # get data
     if cfg.experiment_name == 'snica_synthetic':
-        pdb.set_trace()
         x, f, z, z_mu, states, *params = gen_slds_nica(cfg.data_gen)
+        pdb.set_trace()
     #else:
     #    sys.exit()
 
