@@ -11,7 +11,7 @@ from jax import config
 #from sklearn.decomposition import PCA
 
 from data_generation import gen_slds_nica
-#from train import full_train
+from train import train
 
 # uncomment to debug NaNs
 #config.update("jax_debug_nans", True)
@@ -22,15 +22,14 @@ def main(cfg: DictConfig) -> None:
     # load configs
     cfg = cfg.experiments
 
-    # get data
     if cfg.experiment_name == 'snica_synthetic':
         x, f, z, z_mu, states, *params = gen_slds_nica(cfg.data_gen)
-        pdb.set_trace()
+        train(x, cfg)
     #else:
     #    sys.exit()
 
-    ## train
-    #train(x, f, z_mu, states, cfg)
+    # train
+    train(x, cfg)
 
 
 if __name__ == "__main__":
